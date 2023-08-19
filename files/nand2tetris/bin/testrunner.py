@@ -58,32 +58,27 @@ def gatherTests():
 
         count = 0
 
-        # each test must load a single hardware definition ...
-        m = loadLineHardware.search(contents)
-        if m:
+        if m := loadLineHardware.search(contents):
             count += 1
             elt.hdl = m.group(1)
 
             # make sure the required .hdl file is present so the system does
             # not fall back to a builtin definition
             if not Path(elt.hdl).exists():
-                return ([], newFiles, name + 'requires ' + elt.hdl + ', but it is missing')
+                return [], newFiles, f'{name}requires {elt.hdl}, but it is missing'
 
             # get the output file name
             m = outLineHardware.search(contents)
             if not m:
-                return ([], newFiles, 'no output file found in test file ' + name)
+                return [], newFiles, f'no output file found in test file {name}'
             elt.output = m.group(1)
 
-            # get the compare file name
-            m = compareLineHardware.search(contents)
-            if not m:
-                return ([], newFiles, 'no compare file found in test file ' + name)
-            elt.compare = m.group(1)
+            if m := compareLineHardware.search(contents):
+                elt.compare = m.group(1)
 
-        # ... or a single hack object file
-        m = loadLineAssembly.search(contents)
-        if m:
+            else:
+                return [], newFiles, f'no compare file found in test file {name}'
+        if m := loadLineAssembly.search(contents):
             count += 1
             elt.hack = m.group(1)
 
@@ -93,20 +88,19 @@ def gatherTests():
             # get the compare file name
             m = outLineAssembly.search(contents)
             if not m:
-                return ([], newFiles, 'no output file found in test file ' + name)
+                return [], newFiles, f'no output file found in test file {name}'
             elt.output = m.group(1)
 
-            # get the compare file name
-            m = compareLineAssembly.search(contents)
-            if not m:
-                return ([], newFiles, 'no compare file found in test file ' + name)
-            elt.compare = m.group(1)
+            if m := compareLineAssembly.search(contents):
+                elt.compare = m.group(1)
 
+            else:
+                return [], newFiles, f'no compare file found in test file {name}'
         # should be exactly one kind of test
         if count < 1:
-            return ([], newFiles, 'no load line found in test file ' + name)
+            return [], newFiles, f'no load line found in test file {name}'
         elif count > 1:
-            return ([], newFiles, 'found too many test types in test file ' + name)
+            return [], newFiles, f'found too many test types in test file {name}'
 
     return (tests, newFiles, None)
 
@@ -126,7 +120,7 @@ def addResult(result, name, msg, seconds):
         failure.text = msg
         failures += 1
     else:
-        print('unexpected result type: ' + result)
+        print(f'unexpected result type: {result}')
         sys.exit(1)
 
     tests += 1
@@ -151,11 +145,10 @@ def runHardwareTest(test):
 
     # was it a pass?
     if len(stderr) == 0 and stdout.endswith(hardwareSuccessMessage) and proc.returncode == 0:
-        addResult('passed', 'test file ' + test.test, stdout, seconds)
+        addResult('passed', f'test file {test.test}', stdout, seconds)
 
-    # anything else is a failure
     else:
-        addResult('failure', 'test file ' + test.test, stderr, seconds)
+        addResult('failure', f'test file {test.test}', stderr, seconds)
 
     return seconds
 
@@ -173,7 +166,7 @@ def runAssemblyTest(test):
 
     # did it fail to assemble?
     if len(stderr) != 0 or proc.returncode != 0:
-        addResult('failure', 'source file ' + test.test, stderr, seconds)
+        addResult('failure', f'source file {test.test}', stderr, seconds)
         print(stdout, end='', flush=True)
         print(stderr, end='', flush=True)
         return seconds
@@ -194,11 +187,10 @@ def runAssemblyTest(test):
 
     # was it a pass?
     if len(stderr) == 0 and stdout.endswith(assemblySuccessMessage) and proc.returncode == 0:
-        addResult('passed', 'test file ' + test.test, stdout, seconds)
+        addResult('passed', f'test file {test.test}', stdout, seconds)
 
-    # anything else is a failure
     else:
-        addResult('failure', 'test file ' + test.test, stderr, seconds)
+        addResult('failure', f'test file {test.test}', stderr, seconds)
 
     return seconds
 

@@ -8,7 +8,7 @@ suffix = sys.argv[1]
 cmd = sys.argv[2:]
 
 # get the list of input files to process
-infiles = sorted(glob.glob('inputs/*.' + suffix))
+infiles = sorted(glob.glob(f'inputs/*.{suffix}'))
 
 first = True
 for infile in infiles:
@@ -16,7 +16,7 @@ for infile in infiles:
         print()
     first = False
 
-    outfile = infile[:-len('.' + suffix)] + '.expected'
+    outfile = f"{infile[:-len(f'.{suffix}')]}.expected"
 
     c = ['python3', 'lib/inout-stepper.py', infile, outfile]
     c.extend(cmd)

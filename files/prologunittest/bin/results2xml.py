@@ -18,45 +18,36 @@ case, err, details = None, None, ''
 for line in sys.stdin:
     # outside a test result?
     if case is None:
-        # compiler error?
-        groups = errorTest.match(line)
-        if groups:
+        if groups := errorTest.match(line):
             errors += 1
-            partial = os.path.relpath(groups.group(1))
+            partial = os.path.relpath(groups[1])
             case = ET.SubElement(suite, 'testcase')
-            case.set('name', 'Compiler error in '+partial+' line '+groups.group(2))
+            case.set('name', f'Compiler error in {partial} line {groups[2]}')
             case.set('status', 'error')
             err = ET.SubElement(case, 'error')
-            err.text = groups.group(3)
+            err.text = groups[3]
             case, err, details = None, None, ''
             break
 
-        # simple test pass?
-        groups = completeTest.match(line)
-        if groups:
+        if groups := completeTest.match(line):
             passed += 1
             case = ET.SubElement(suite, 'testcase')
-            case.set('name', groups.group(1))
+            case.set('name', groups[1])
             case, err, details = None, None, ''
             continue
 
-        # multiline result?
-        groups = beginningOfTest.match(line)
-        if groups:
+        if groups := beginningOfTest.match(line):
             passed += 1
             case = ET.SubElement(suite, 'testcase')
-            case.set('name', groups.group(1))
+            case.set('name', groups[1])
             details = line + '\n'
             continue
 
-    # inside a multiline result?
     else:
         details += line + '\n'
 
-        # error in the test?
-        groups = errorInsideTest.match(line)
-        if groups:
-            partial = os.path.relpath(groups.group(1))
+        if groups := errorInsideTest.match(line):
+            partial = os.path.relpath(groups[1])
             if err is None:
                 case.set('status', 'failed')
                 passed -= 1
@@ -64,9 +55,7 @@ for line in sys.stdin:
                 err = ET.SubElement(case, 'failure')
             continue
 
-        # end of test case?
-        groups = endOfTest.match(line)
-        if groups:
+        if groups := endOfTest.match(line):
             if err is not None:
                 err.text = details
             case, err, details = None, None, ''

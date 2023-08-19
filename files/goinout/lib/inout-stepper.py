@@ -11,7 +11,7 @@ bufsize = 65536
 
 def main():
     if len(sys.argv) < 4:
-        print('Usage: {} inputfile outputfile cmd ...'.format(sys.argv[0]), file=sys.stderr)
+        print(f'Usage: {sys.argv[0]} inputfile outputfile cmd ...', file=sys.stderr)
         sys.exit(1)
 
     inputfile, outputfile = sys.argv[1], sys.argv[2]
@@ -60,10 +60,7 @@ def main():
             if len(inputData) > 0:
                 # grab one line, or everything if there are no newlines
                 newline = inputData.find(b'\n')
-                if newline == -1:
-                    nextInput = inputData
-                else:
-                    nextInput = inputData[:newline+1]
+                nextInput = inputData if newline == -1 else inputData[:newline+1]
             elif not inputClosed:
                 os.close(stdin)
                 inputClosed = True

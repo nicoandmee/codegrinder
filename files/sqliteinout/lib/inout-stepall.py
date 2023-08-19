@@ -18,9 +18,7 @@ for infile in infiles:
 
     outfile = os.path.join('outputs', infile[:-len('.sql')] + '.expected')
 
-    c = ['python3', 'lib/inout-stepper.py', infile, outfile]
-    c.extend(cmd)
-
+    c = ['python3', 'lib/inout-stepper.py', infile, outfile, *cmd]
     # run the program to get the actual output
     print(' '.join(c))
     status = subprocess.call(c)

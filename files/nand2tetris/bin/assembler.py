@@ -75,10 +75,7 @@ JUMPS = {
 def isSymbol(s):
     if s == '' or s[0].isdigit():
         return False
-    for ch in s:
-        if not ch.isalnum() and ch not in '_.$:':
-            return False
-    return True
+    return not any(not ch.isalnum() and ch not in '_.$:' for ch in s)
 
 # test if a given string is a valid constant (0--32767)
 def isConstant(s):
@@ -86,8 +83,8 @@ def isConstant(s):
 
 def fail(msg, srcline, srclinenumber):
     print('Quitting due to error on line %d:' % srclinenumber, file=sys.stderr)
-    print('  Input: ' + repr(srcline), file=sys.stderr)
-    print('  Error: ' + msg, file=sys.stderr)
+    print(f'  Input: {repr(srcline)}', file=sys.stderr)
+    print(f'  Error: {msg}', file=sys.stderr)
     sys.exit(-1)
 
 #
@@ -237,7 +234,7 @@ class SymbolTable:
 def main():
     # validate input arguments
     if len(sys.argv) != 2 or not sys.argv[1].endswith('.asm'):
-        print('Usage: %s <input>.asm' % sys.argv[0], file=sys.stderr)
+        print(f'Usage: {sys.argv[0]} <input>.asm', file=sys.stderr)
         sys.exit(-1)
 
     # in.asm -> in.hack
@@ -247,82 +244,77 @@ def main():
     # this object persist across both passes
     symboltable = SymbolTable()
 
-    infile = open(source)
-    parsedlines = parse(infile)
-    infile.close()
-    outfile = open(target, 'w')
+    with open(source) as infile:
+        parsedlines = parse(infile)
+    with open(target, 'w') as outfile:
+            # parse file twice. address labels are assigned in first pass,
+            # variable labels are assigned in second, and code is generated in second
+        for sweep in (1, 2):
+            # open files (output is only written during second pass)
 
-    # parse file twice. address labels are assigned in first pass,
-    # variable labels are assigned in second, and code is generated in second
-    for sweep in (1, 2):
-        # open files (output is only written during second pass)
+            # keep track of instruction number and next available variable slot
+            pc = 0
+            variable = 16
 
-        # keep track of instruction number and next available variable slot
-        pc = 0
-        variable = 16
+                    # loop through command lines
+            for line in parsedlines:
+                if line[0] == 'A_INSTRUCTION':
+                    # get the value to load
+                    symbol = line[1]
 
-        # loop through command lines
-        for line in parsedlines:
-            if line[0] == 'A_INSTRUCTION':
-                # get the value to load
-                symbol = line[1]
-
-                if isSymbol(symbol) and sweep == 2:
-                    # symbols are resolved on the second pass only
-                    if symboltable.contains(symbol):
-                        value = symboltable.getAddress(symbol)
+                    if isSymbol(symbol) and sweep == 2:
+                        # symbols are resolved on the second pass only
+                        if symboltable.contains(symbol):
+                            value = symboltable.getAddress(symbol)
+                        else:
+                            symboltable.addEntry(symbol, variable)
+                            value = variable
+                            variable += 1
+                    elif isConstant(symbol):
+                        # constants are easy
+                        value = int(symbol)
                     else:
-                        symboltable.addEntry(symbol, variable)
-                        value = variable
-                        variable += 1
-                elif isConstant(symbol):
-                    # constants are easy
-                    value = int(symbol)
+                        # found a symbol on the first pass
+                        value = 0
+
+                    # format it as a 15-bit binary number
+                    n = bin(value)[2:]
+                    n = '0'*(15-len(n)) + n
+
+                                    # write the output
+                    if sweep == 2:
+                        print(f'0{n}', file=outfile)
+
+                    # advance the address counter
+                    pc += 1
+
+                elif line[0] == 'C_INSTRUCTION':
+                    # get the pieces
+                    command = '111'
+                    command += COMPUTATIONS[line[2]]
+                    command += DESTINATIONS[line[1]]
+                    command += JUMPS[line[3]]
+
+                    # write the output
+                    if sweep == 2:
+                        print(command, file=outfile)
+
+                    # advance the address counter
+                    pc += 1
+
+                elif line[0] == 'L_INSTRUCTION':
+                    # get the label name
+                    label = line[1]
+                    assert isSymbol(label)
+
+                                    # add to the symbol table (first pass only)
+                    if sweep == 1:
+                        if symboltable.contains(label):
+                            fail(f'label already used: [{label}]', line[2], line[3])
+                        symboltable.addEntry(label, pc)
+
                 else:
-                    # found a symbol on the first pass
-                    value = 0
-
-                # format it as a 15-bit binary number
-                n = bin(value)[2:]
-                n = '0'*(15-len(n)) + n
-
-                # write the output
-                if sweep == 2:
-                    print('0' + n, file=outfile)
-
-                # advance the address counter
-                pc += 1
-
-            elif line[0] == 'C_INSTRUCTION':
-                # get the pieces
-                command = '111'
-                command += COMPUTATIONS[line[2]]
-                command += DESTINATIONS[line[1]]
-                command += JUMPS[line[3]]
-
-                # write the output
-                if sweep == 2:
-                    print(command, file=outfile)
-
-                # advance the address counter
-                pc += 1
-
-            elif line[0] == 'L_INSTRUCTION':
-                # get the label name
-                label = line[1]
-                assert isSymbol(label)
-
-                # add to the symbol table (first pass only)
-                if sweep == 1:
-                    if symboltable.contains(label):
-                        fail('label already used: [%s]' % label,
-                                line[2], line[3])
-                    symboltable.addEntry(label, pc)
-
-            else:
-                assert False
-
-    outfile.close()
+                    assert False
 
 if __name__ == '__main__':
     main()

@@ -133,9 +133,7 @@ def _codegrinder_run_tests_enabled() -> bool:
         (filename, dotfile, problemSetDir, problemDir) = get_codegrinder_project_info()
         if os.path.exists(os.path.join(problemDir, 'tests')):
             return True
-        if os.path.exists(os.path.join(problemDir, 'inputs')):
-            return True
-        return False
+        return bool(os.path.exists(os.path.join(problemDir, 'inputs')))
     except SilentException:
         return False
     except DialogException:
@@ -225,10 +223,10 @@ def show_instructions(problemDir: str) -> None:
     if '<body>' in doc and '</body>' in doc:
         parts = doc.split('<body>')
         if len(parts) == 2:
-            doc = parts[0] + '<body><div style="font-size: 16pt">' + parts[1]
+            doc = f'{parts[0]}<body><div style="font-size: 16pt">{parts[1]}'
         parts = doc.split('</body>')
         if len(parts) == 2:
-            doc = parts[0] + '</div></body>' + parts[1]
+            doc = f'{parts[0]}</div></body>{parts[1]}'
     iv.set_content(doc)
     thonny.get_workbench().show_view('HtmlFrame', set_focus=False)
 
@@ -238,10 +236,8 @@ def _codegrinder_run_tests_handler() -> None:
         (filename, dotfile, problemSetDir, problemDir) = get_codegrinder_project_info()
 
         # run the commands
-        cmd_line = '%cd ' + shlex.quote(problemDir) + '\n'
-        python = 'python3'
-        if os.name == 'nt':
-            python = 'python'
+        cmd_line = f'%cd {shlex.quote(problemDir)}' + '\n'
+        python = 'python' if os.name == 'nt' else 'python3'
         if os.path.exists(os.path.join(problemDir, 'tests')):
             cmd_line += f'!{python} -m unittest discover -vs tests\n'
         elif os.path.exists(os.path.join(problemDir, 'inputs')):
@@ -258,9 +254,7 @@ def _codegrinder_run_tests_handler() -> None:
                 main = py_files[0]
             elif 'main.py' in py_files:
                 main = 'main.py'
-            elif count == 1:
-                pass
-            else:
+            elif count != 1:
                 main = filename
             cmd_line += f'!{python} bin/inout-stepall.py {python} {main}'
         else:
@@ -281,7 +275,7 @@ def _codegrinder_download_handler() -> None:
         must_load_config()
         user: User = must_get_object('/users/me', None, User)
         assignments: List[Assignment] = must_get_object_list(f'/users/{user.id}/assignments', None, Assignment)
-        if len(assignments) == 0:
+        if not assignments:
             tkinter.messagebox.showinfo('No assignments found',
                 'Remember that you must click on each assignment in Canvas once ' +
                 'before you can access it here.',
@@ -307,7 +301,7 @@ def _codegrinder_download_handler() -> None:
             if problemDir is not None:
                 downloads.append(problemDir)
 
-        if len(downloads) == 0:
+        if not downloads:
             tkinter.messagebox.showinfo('No new assignments found',
                 'You must click on each assignment in Canvas once ' +
                 'before you can access it here.\n\nIf you have clicked on it in Canvas and ' +
@@ -316,8 +310,7 @@ def _codegrinder_download_handler() -> None:
                 master=thonny.get_workbench())
         else:
             msg = f'Downloaded {len(downloads)} new assignment{"" if len(downloads) == 1 else "s"}'
-            if len(downloads) > 0:
-                msg += ':\n\n' + '\n'.join(downloads)
+            msg += ':\n\n' + '\n'.join(downloads)
             tkinter.messagebox.showinfo('Assignments downloaded', msg,
                 master=thonny.get_workbench())
 
@@ -345,8 +338,10 @@ def _codegrinder_save_and_sync_handler() -> None:
         }
         signed = must_post_commit_bundle('/commit_bundles/unsigned', None, unsigned)
 
-        msg = 'A copy of your current work has been saved '
-        msg += 'to the CodeGrinder server where your instructor '
+        msg = (
+            'A copy of your current work has been saved '
+            + 'to the CodeGrinder server where your instructor '
+        )
         msg += 'can access it.\n\n'
         msg += 'You should always select this option '
         msg += 'before contacting your instructor for help.'
@@ -408,17 +403,18 @@ def _codegrinder_reset_handler() -> None:
                 if ondisk != expected:
                     changed.append(name)
 
-        if len(changed) == 0:
+        if not changed:
             tkinter.messagebox.showinfo('No files have been changed',
                 'No files have been changed since the beginning of the current step.',
                 master=thonny.get_workbench())
             return
 
         file_list = '\n'.join(changed)
-        answer: bool = tkinter.messagebox.askokcancel('Are you sure?',
-            f'Any changes you have made in the following files will be overwritten:\n\n{file_list}\n\n'+
-            f'Do you wish to continue?',
-            master=thonny.get_workbench())
+        answer: bool = tkinter.messagebox.askokcancel(
+            'Are you sure?',
+            f'Any changes you have made in the following files will be overwritten:\n\n{file_list}\n\nDo you wish to continue?',
+            master=thonny.get_workbench(),
+        )
 
         if answer:
             update_files(problemDir, files, {})
@@ -445,7 +441,7 @@ def _codegrinder_progress_handler() -> None:
         problem_set: ProblemSet = must_get_object(f'/problem_sets/{assignment.problemSetID}', None, ProblemSet)
         problem_set_problems: List[ProblemSetProblem] = must_get_object_list(f'/problem_sets/{assignment.problemSetID}/problems', None, ProblemSetProblem)
         msg = f'{assignment.canvasTitle}\n'
-        if len(problem_set_problems) == 0:
+        if not problem_set_problems:
             raise DialogException('No problems found',
                 'Could not find any problems as part of this assignment.')
 
@@ -477,11 +473,7 @@ def _codegrinder_progress_handler() -> None:
                     scoreSum += scores[i] * step.weight
                     if scores[i] == 1:
                         completed += 1
-            if weightSum == 0:
-                stepScore = 0.0
-            else:
-                stepScore = scoreSum / weightSum
-
+            stepScore = 0.0 if weightSum == 0 else scoreSum / weightSum
             msg += f'    Score: {stepScore * 100.0:.0f}%'
             if len(steps) > 1:
                 msg += f' (completed {completed}/{len(steps)} steps)'
@@ -924,14 +916,14 @@ def do_request(path: str, params: Optional[Dict[str, Any]], method: str, upload:
 
     url = f'https://{CONFIG.host}{urlPrefix}{path}'
     (ck, cv) = CONFIG.cookie.split('=', 1)
-    headers = {
-        'Accept': 'application/json',
-        'Accept-Encoding': 'gzip',
-    }
     data = None
-    if upload != '' and method in ('POST', 'PUT'):
-        headers['Content-Type'] = 'application/json'
-        headers['Content-Encoding'] = 'gzip'
+    if upload != '' and method in {'POST', 'PUT'}:
+        headers = {
+            'Accept': 'application/json',
+            'Accept-Encoding': 'gzip',
+            'Content-Type': 'application/json',
+            'Content-Encoding': 'gzip',
+        }
         data = upload.encode('utf-8')
 
     resp = requests.request(method, url, params=params, data=data, cookies={ck: cv})
@@ -977,9 +969,8 @@ def must_post_commit_bundle(path: str, params: Optional[Dict[str, Any]], upload:
     return bundle
 
 def course_directory(label: str) -> str:
-    match = re.match(r'^([A-Za-z]+[- ]*\d+\w*)\b', label)
-    if match:
-        return match.group(1)
+    if match := re.match(r'^([A-Za-z]+[- ]*\d+\w*)\b', label):
+        return match[1]
     else:
         return label
 
@@ -1025,7 +1016,7 @@ def get_assignment(assignment: Assignment, course: Course, rootDir: str) -> Opti
             problemType: ProblemType = must_get_object(f'/problem_types/{step.problemType}', None, ProblemType)
             types[step.problemType] = problemType
 
-    for unique in steps.keys():
+    for unique in steps:
         commit, problem, step = commits[unique], problems[unique], steps[unique]
 
         # if there is only one problem in the set, use the main directory
@@ -1033,10 +1024,10 @@ def get_assignment(assignment: Assignment, course: Course, rootDir: str) -> Opti
         if len(steps) > 1:
             target = os.path.join(rootDir, unique)
 
-        # save the step files
-        files: Dict[str, bytes] = {}
-        for (name, contents) in step.files.items():
-            files[from_slash(name)] = decode64(contents)
+        files: Dict[str, bytes] = {
+            from_slash(name): decode64(contents)
+            for name, contents in step.files.items()
+        }
         files[os.path.join('doc', 'index.html')] = step.instructions.encode()
 
         # step files may be overwritten by commit files
@@ -1070,8 +1061,8 @@ def next_step(directory: str, info: Info, problem: Problem, commit: Commit, type
     # advance to the next step
     if newStep is None:
         newStep = get_object(f'/problems/{problem.id}/steps/{commit.step+1}', None, ProblemStep)
-        if newStep is None:
-            return False
+    if newStep is None:
+        return False
     oldStep: ProblemStep = must_get_object(f'/problems/{problem.id}/steps/{commit.step}', None, ProblemStep)
     # log.Printf("moving to step %d", newStep.Step)
 
@@ -1099,10 +1090,10 @@ def next_step(directory: str, info: Info, problem: Problem, commit: Commit, type
     for (name, contents) in types[newStep.problemType].files.items():
         files[from_slash(name)] = decode64(contents)
 
-    # files from the old problem type and old step may need to be removed
-    oldFiles: Dict[str, bool] = {}
-    for name in types[oldStep.problemType].files.keys():
-        oldFiles[from_slash(name)] = True
+    oldFiles: Dict[str, bool] = {
+        from_slash(name): True
+        for name in types[oldStep.problemType].files.keys()
+    }
     for name in oldStep.files.keys():
         oldFiles[from_slash(name)] = True
 
@@ -1132,7 +1123,7 @@ def update_files(directory: str, files: Dict[str, bytes], oldFiles: Dict[str, bo
             with open(path, 'wb') as fp:
                 fp.write(contents)
 
-    for name in oldFiles.keys():
+    for name in oldFiles:
         if name in files:
             continue
         path = os.path.join(directory, name)
@@ -1143,7 +1134,7 @@ def update_files(directory: str, files: Dict[str, bytes], oldFiles: Dict[str, bo
             try:
                 # ignore errors--the directory may not be empty
                 os.rmdir(os.path.join(directory, dirpath))
-            except (FileNotFoundError, OSError):
+            except OSError:
                 pass
 
 def gather_student(now: datetime.datetime, startDir: str) -> Tuple[ProblemType, Problem, Assignment, Commit, DotFile]:
@@ -1160,14 +1151,15 @@ def gather_student(now: datetime.datetime, startDir: str) -> Tuple[ProblemType, 
         for u in dotfile.problems:
             unique = u
         problemDir = problemSetDir
+    elif problemDir == '':
+        raise RuntimeError('unable to identify which problem this file is part of')
     else:
-        # use the subdirectory name to identify the problem
-        if problemDir == '':
-            raise RuntimeError('unable to identify which problem this file is part of')
         unique = os.path.basename(problemDir)
     info = dotfile.problems[unique]
     if not info:
-        raise RuntimeError('unable to recognize the problem based on the directory name of ' + unique)
+        raise RuntimeError(
+            f'unable to recognize the problem based on the directory name of {unique}'
+        )
     problem: Problem = must_get_object(f'/problems/{info.id}', None, Problem)
 
     # get the problem step
@@ -1176,12 +1168,11 @@ def gather_student(now: datetime.datetime, startDir: str) -> Tuple[ProblemType, 
     # get the problem type and verify local files match
     problemType: ProblemType = must_get_object(f'/problem_types/{step.problemType}', None, ProblemType)
 
-    # make sure all step and problemtype files are up to date
-    stepFiles: Dict[str, bytes] = {}
-    for (name, contents) in step.files.items():
-        # do not overwrite student files
-        if name not in step.whitelist:
-            stepFiles[from_slash(name)] = decode64(contents)
+    stepFiles: Dict[str, bytes] = {
+        from_slash(name): decode64(contents)
+        for name, contents in step.files.items()
+        if name not in step.whitelist
+    }
     for (name, contents) in problemType.files.items():
         stepFiles[from_slash(name)] = decode64(contents)
     stepFiles[os.path.join('doc', 'index.html')] = step.instructions.encode()
@@ -1197,7 +1188,7 @@ def gather_student(now: datetime.datetime, startDir: str) -> Tuple[ProblemType, 
             continue
         with open(path, 'rb') as fp:
             files[name] = encode64(fp.read())
-    if len(missing) > 0:
+    if missing:
         msg = 'Could not find all expected files:\n\n' + '\n'.join(missing)
         raise DialogException('Missing files', msg)
 
@@ -1206,22 +1197,22 @@ def gather_student(now: datetime.datetime, startDir: str) -> Tuple[ProblemType, 
         id=0,
         assignmentID=dotfile.assignmentID,
         problemID=info.id,
-        step=info.step, 
+        step=info.step,
         action='',
         note='',
         files=files,
         transcript=None,
         reportCard=None,
         score=0.0,
-        createdAt=now.isoformat() + 'Z',
-        updatedAt=now.isoformat() + 'Z')
+        createdAt=f'{now.isoformat()}Z',
+        updatedAt=f'{now.isoformat()}Z',
+    )
 
     return (problemType, problem, assignment, commit, dotfile)
 
 def must_confirm_commit_bundle(bundle: CommitBundle, args: Optional[List[str]], bar: Progress) -> CommitBundle:
     # create a websocket connection to the server
-    url = 'wss://' + bundle.hostname + urlPrefix + '/sockets/' + \
-        bundle.problemType.name + '/' + bundle.commit.action
+    url = f'wss://{bundle.hostname}{urlPrefix}/sockets/{bundle.problemType.name}/{bundle.commit.action}'
     certs = certifi.where()
     socket = websocket.create_connection(url, sslopt={'ca_certs': certs})
 
@@ -1248,11 +1239,7 @@ def must_confirm_commit_bundle(bundle: CommitBundle, args: Optional[List[str]], 
             result: CommitBundle = CommitBundle.from_dict(reply['commitBundle'])
             return result
 
-        if 'event' in reply and reply['event']:
-            # ignore the streamed data
-            pass
-
-        else:
+        if 'event' not in reply or not reply['event']:
             socket.close()
             raise DialogException('Server error',
                 'The server returned an unexpected message type.')
@@ -1332,10 +1319,7 @@ def dump_event_message(e: EventMessage) -> str:
     if e.event in ('stdin', 'stdout', 'stderr') and e.streamData is not None:
         return base64.b64decode(e.streamData, validate=True).decode('utf-8')
 
-    if e.event == 'error':
-        return f'Error: {e.error}\n'
-
-    return ''
+    return f'Error: {e.error}\n' if e.event == 'error' else ''
 
 signals: Dict[int, str] = {
         1:  "SIGHUP",

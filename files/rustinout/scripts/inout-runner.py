@@ -12,7 +12,7 @@ suffix = sys.argv[1]
 cmd = sys.argv[2:]
 
 # get the list of input files to process
-infiles = sorted(glob.glob('inputs/*.' + suffix))
+infiles = sorted(glob.glob(f'inputs/*.{suffix}'))
 
 testsuites = ET.Element('testsuites')
 suite = ET.SubElement(testsuites, 'testsuite')
@@ -24,19 +24,13 @@ for infile in infiles:
     if not prevpassed:
         print()
 
-    outfile = infile[:-len('.' + suffix)] + '.expected'
-    actualfile = infile[:-len('.' + suffix)] + '.actual'
+    outfile = f"{infile[:-len(f'.{suffix}')]}.expected"
+    actualfile = f"{infile[:-len(f'.{suffix}')]}.actual"
 
-    # get the input
-    fp = open(infile, 'rb')
-    input = fp.read()
-    fp.close()
-
-    # get the expected output
-    fp = open(outfile, 'rb')
-    expected = fp.read()
-    fp.close()
-
+    with open(infile, 'rb') as fp:
+        input = fp.read()
+    with open(outfile, 'rb') as fp:
+        expected = fp.read()
     # report the result in XML
     case = ET.SubElement(suite, 'testcase')
     case.set('name', infile)
@@ -49,14 +43,12 @@ for infile in infiles:
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     (actual, stderr) = proc.communicate(input)
     seconds = time.time() - start
-    fp = open(actualfile, 'wb')
-    fp.write(actual)
-    fp.close()
-
+    with open(actualfile, 'wb') as fp:
+        fp.write(actual)
     # check the output
     passed = True
     if proc.returncode != 0:
-        msg = '\n!!! returned non-zero status code {}'.format(proc.returncode)
+        msg = f'\n!!! returned non-zero status code {proc.returncode}'
         print(msg)
         body += msg + '\n'
         passed = False

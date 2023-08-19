@@ -222,16 +222,14 @@ class ListTag():
             self.index += 1
 
     def line_index(self):
-        #------------------------------------------------------------------------------------------
-        if self.ordered:
-            if self.type == HTML.TypeOrderedList._1:
-                return str(self.index)
-            elif self.type == HTML.TypeOrderedList.a:
-                return self._index_to_str(self.index).lower()
-            elif self.type == HTML.TypeOrderedList.A:
-                return self._index_to_str(self.index).upper()
-        else:
+        if not self.ordered:
             return chr(8226)
+        if self.type == HTML.TypeOrderedList._1:
+            return str(self.index)
+        elif self.type == HTML.TypeOrderedList.a:
+            return self._index_to_str(self.index).lower()
+        elif self.type == HTML.TypeOrderedList.A:
+            return self._index_to_str(self.index).upper()
 
     def _index_to_str(self, index):
         #------------------------------------------------------------------------------------------
@@ -306,7 +304,7 @@ class HTMLTextParser(HTMLParser):
         elif key in Bind.__dict__.values():
             main_key = Bind.KEY
         else:
-            raise ValueError("key %s doesn't exists" % key)
+            raise ValueError(f"key {key} doesn't exists")
 
         return main_key
 
@@ -413,16 +411,15 @@ class HTMLTextParser(HTMLParser):
             else:
                 self._stack_add(tag, Fnt.UNDERLINE)
                 self._stack_add(tag, Fnt.OVERSTRIKE)
+        elif tag == HTML.Tag.A and attrs[HTML.Attrs.HREF]:
+            self._stack_add(tag, Fnt.UNDERLINE, True)
+            self._stack_add(tag, Fnt.OVERSTRIKE, False)
+        elif tag == HTML.Tag.U:
+            self._stack_add(tag, Fnt.UNDERLINE, True)
+            self._stack_add(tag, Fnt.OVERSTRIKE, False)
         else:
-            if tag == HTML.Tag.A and attrs[HTML.Attrs.HREF]:
-                self._stack_add(tag, Fnt.UNDERLINE, True)
-                self._stack_add(tag, Fnt.OVERSTRIKE, False)
-            elif tag == HTML.Tag.U:
-                self._stack_add(tag, Fnt.UNDERLINE, True)
-                self._stack_add(tag, Fnt.OVERSTRIKE, False)
-            else:
-                self._stack_add(tag, Fnt.UNDERLINE)
-                self._stack_add(tag, Fnt.OVERSTRIKE)
+            self._stack_add(tag, Fnt.UNDERLINE)
+            self._stack_add(tag, Fnt.OVERSTRIKE)
 
 
     def handle_starttag(self, tag, attrs):
@@ -437,7 +434,7 @@ class HTMLTextParser(HTMLParser):
             if tag == HTML.Tag.B or tag == HTML.Tag.STRONG or tag in HTML.HEADING_TAGS:
                 self._stack_add(tag, Fnt.WEIGHT, "bold")
 
-            elif tag == HTML.Tag.I or tag == HTML.Tag.EM:
+            elif tag in [HTML.Tag.I, HTML.Tag.EM]:
                 self._stack_add(tag, Fnt.SLANT, "italic")
 
             elif tag == HTML.Tag.A:
@@ -468,9 +465,7 @@ class HTMLTextParser(HTMLParser):
                 self._stack_add(tag, WCfg.TABS, tabs)
 
             elif tag == HTML.Tag.LI:
-                #------------------------------------------------------------------ [ LISTS_LINES ]
-                level = len(self.list_tags)
-                if level:
+                if level := len(self.list_tags):
                     self.list_tags[-1].add()
 
                     if self.strip:
@@ -494,8 +489,7 @@ class HTMLTextParser(HTMLParser):
             import re
             image = None
             src = attrs[HTML.Attrs.SRC]
-            encoding = re.match("data:[-\w.]+/[-\w.]+;base64,", src)
-            if encoding:
+            if encoding := re.match("data:[-\w.]+/[-\w.]+;base64,", src):
                 #-------------------------------------------------------------------- [ INLINE_TAGS ]
                 raw = src[len(encoding[0]):]
                 image = Image.open(BytesIO(base64.b64decode(raw)))
@@ -533,22 +527,21 @@ class HTMLTextParser(HTMLParser):
                 self._w.image_create(tk.INSERT, image=self.images[-1])
 
         if self.strip:
-            #------------------------------------------------------------------------ [ NEW_LINES ]
             if tag == HTML.Tag.BR:
                 self._insert_new_line()
             else:
                 self.html_tags.append(tag)
 
-            if tag in HTML.NEW_LINE_TAGS and self.strip and self._w.index("end-1c") != "1.0":
-                if tag in (HTML.Tag.DIV,):
-                    self._insert_new_line()
-                elif tag in (HTML.Tag.UL, HTML.Tag.OL):
-                    if len(self.list_tags) == 1:
-                        self._insert_new_line(double=True)
-                    else:
-                        self._insert_new_line(double=False)
-                else:
+        if tag in HTML.NEW_LINE_TAGS and self.strip and self._w.index("end-1c") != "1.0":
+            if tag in (HTML.Tag.DIV,):
+                self._insert_new_line()
+            elif tag in (HTML.Tag.UL, HTML.Tag.OL):
+                if len(self.list_tags) == 1:
                     self._insert_new_line(double=True)
+                else:
+                    self._insert_new_line(double=False)
+            else:
+                self._insert_new_line(double=True)
 
         self._w_tags_add()
 
@@ -570,11 +563,10 @@ class HTMLTextParser(HTMLParser):
         elif self._w.get("end-2c", "end-1c") == "\n":
             if double:
                 self._w.insert(tk.INSERT, "\n")
+        elif double:
+            self._w.insert(tk.INSERT, "\n\n")
         else:
-            if double:
-                self._w.insert(tk.INSERT, "\n\n")
-            else:
-                self._w.insert(tk.INSERT, "\n")
+            self._w.insert(tk.INSERT, "\n")
 
 
     def _text_rstrip(self):
@@ -599,26 +591,24 @@ class HTMLTextParser(HTMLParser):
 
 
     def handle_data(self, data):
-        #------------------------------------------------------------------------------------------
-        if self.strip:
-            if len(self.html_tags) and self.html_tags[-1] in (HTML.Tag.PRE, HTML.Tag.CODE):
-                pass
-            elif not data.strip():
+        if len(self.html_tags) and self.html_tags[-1] in (HTML.Tag.PRE, HTML.Tag.CODE):
+            pass
+        elif not data.strip():
+            if self.strip:
                 data = ""
-            else:
-                # left strip
-                if self._w.index("end-1c").endswith(".0"):
-                    data = data.lstrip()
-                elif self._w.get("end-2c", "end-1c") == " ":
-                    data = data.lstrip()
+        elif self.strip:
+            # left strip
+            if self._w.index("end-1c").endswith(".0"):
+                data = data.lstrip()
+            elif self._w.get("end-2c", "end-1c") == " ":
+                data = data.lstrip()
 
-                data = data.replace("\n", " ").replace("\t", " ")
-                data = data + " "
-                data = self._remove_multi_spaces(data)
-                if len(self.html_tags):
-                    level = len(self.list_tags)
-                    if self.html_tags[-1] in (HTML.Tag.UL, HTML.Tag.OL):
-                        self._w.insert(tk.INSERT, "\t" * 2 * level)
+            data = data.replace("\n", " ").replace("\t", " ")
+            data = f"{data} "
+            data = self._remove_multi_spaces(data)
+            if len(self.html_tags):
+                if self.html_tags[-1] in (HTML.Tag.UL, HTML.Tag.OL):
+                    self._w.insert(tk.INSERT, "\t" * 2 * len(self.list_tags))
 
         self._w.insert(tk.INSERT, data)
 
@@ -646,13 +636,13 @@ class HTMLTextParser(HTMLParser):
             if tag == HTML.Tag.B or tag == HTML.Tag.STRONG or tag in HTML.HEADING_TAGS:
                 self._stack_pop(tag, Fnt.WEIGHT)
 
-            elif tag == HTML.Tag.I or tag == HTML.Tag.EM:
+            elif tag in [HTML.Tag.I, HTML.Tag.EM]:
                 self._stack_pop(tag, Fnt.SLANT)
 
             elif tag == HTML.Tag.A:
                 self._stack_pop(tag, Bind.LINK)
 
-            elif tag == HTML.Tag.OL or tag == HTML.Tag.UL:
+            elif tag in [HTML.Tag.OL, HTML.Tag.UL]:
                 if len(self.list_tags):
                     self.list_tags = self.list_tags[:-1]
 

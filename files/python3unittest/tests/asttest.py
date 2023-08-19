@@ -12,12 +12,11 @@ class ASTTest(unittest.TestCase):
         submission."""
         self.filename = filename
         self.printed_lines = []
-        f = open(filename)
-        text = f.read()
-        self.file = text
-        if parse_file:
-            self.tree = ast.parse(text)
-        f.close()
+        with open(filename) as f:
+            text = f.read()
+            self.file = text
+            if parse_file:
+                self.tree = ast.parse(text)
 
     def find_all(self, node_type, start_node=None):
         """Returns all of the AST nodes matching the given node type. Optional
@@ -25,11 +24,7 @@ class ASTTest(unittest.TestCase):
         tree. TODO: list common node types here for easy access."""
         if start_node is None:
             start_node = self.tree
-        nodes = []
-        for node in ast.walk(start_node):
-            if isinstance(node, node_type):
-                nodes.append(node)
-        return nodes
+        return [node for node in ast.walk(start_node) if isinstance(node, node_type)]
 
     def print_replacement(self, *text, **kwargs):
         """Saves printed lines to a data member. Used by exec_solution, not
@@ -48,46 +43,50 @@ class ASTTest(unittest.TestCase):
 
     def get_function_calls(self, start_node=None):
         """Helper to find all of the function calls in the submission."""
-        names = []
-        for func in self.find_all(ast.Call, start_node):
-            if isinstance(func.func, ast.Name):
-                names.append(func.func.id)
-        return names
+        return [
+            func.func.id
+            for func in self.find_all(ast.Call, start_node)
+            if isinstance(func.func, ast.Name)
+        ]
 
     def find_function_calls(self, func_name):
         """Finds all of the function calls that match a certain name and
         returns their nodes."""
-        calls = []
-        for call in self.find_all(ast.Call):
-            if isinstance(call.func, ast.Name) and call.func.id == func_name:
-                calls.append(call)
-        return calls
+        return [
+            call
+            for call in self.find_all(ast.Call)
+            if isinstance(call.func, ast.Name) and call.func.id == func_name
+        ]
 
     def get_method_calls(self, start_node=None):
         """Helper to find all of the function calls in the submission."""
-        names = []
-        for func in self.find_all(ast.Call, start_node):
-            if isinstance(func.func, ast.Attribute):
-                names.append(func.func.attr)
-        return names
+        return [
+            func.func.attr
+            for func in self.find_all(ast.Call, start_node)
+            if isinstance(func.func, ast.Attribute)
+        ]
 
     def find_method_calls(self, func_name):
         """Finds all of the method calls that match a certain name and returns
         their nodes."""
-        calls = []
-        for call in self.find_all(ast.Call):
-            if isinstance(call.func, ast.Attribute) and call.func.attr == func_name:
-                calls.append(call)
-        return calls
+        return [
+            call
+            for call in self.find_all(ast.Call)
+            if isinstance(call.func, ast.Attribute) and call.func.attr == func_name
+        ]
 
     def match_signature(self, funcname, argc):
         """Finds and returns the function definition statement that matches the
         given function name and argument count. If it can't find a
         corresponding function definition, it returns None."""
-        for func in self.find_all(ast.FunctionDef):
-            if func.name == funcname and len(func.args.args) == argc:
-                return func
-        return None
+        return next(
+            (
+                func
+                for func in self.find_all(ast.FunctionDef)
+                if func.name == funcname and len(func.args.args) == argc
+            ),
+            None,
+        )
 
     def assert_prints(self, lines=1, msg="You are not printing anything!"):
         """Assert helper testing the number of printed lines."""
@@ -96,19 +95,16 @@ class ASTTest(unittest.TestCase):
     def function_prints(self, func_def_node):
         """Checks whether the given function has been defined to print or not."""
         calls_in_func = self.find_all(ast.Call, func_def_node)
-        for call in calls_in_func:
-            if call.func.id == "print":
-                return True
-        return False
+        return any(call.func.id == "print" for call in calls_in_func)
 
     def get_function_linenos(self):
-        linenos = {}
-        for funcdef in self.find_all(ast.FunctionDef):
-            linenos[funcdef.name] = {
-                    "start": funcdef.lineno,
-                    "end": get_function_end_lineno(funcdef),
-                    }
-        return linenos
+        return {
+            funcdef.name: {
+                "start": funcdef.lineno,
+                "end": get_function_end_lineno(funcdef),
+            }
+            for funcdef in self.find_all(ast.FunctionDef)
+        }
 
     def ensure_coverage(self, function_names, min_coverage):
         """Checks whether the student has written enough unit tests to cover a
@@ -126,22 +122,22 @@ class ASTTest(unittest.TestCase):
             m = importlib.import_module(basename)
             # reload it to force evaluating it (in case already imported elsewhere)
             importlib.reload(m)
+
         # run the helper function (trigger) to trigger evaluation of the solution
         tracer.runfunc(trigger, basename)
         # write tracing results to a *.cover file
         tracer.results().write_results(coverdir='.')
         # count how many lines were skipped
         all_skipped = []
-        f = open(basename+".cover")
-        lineno = 0
-        for line in f:
-            lineno += 1
-            if line[:6] == ">>>>>>":
-                # skipped line
-                all_skipped.append((line[8:], lineno))
-        f.close()
+        with open(f"{basename}.cover") as f:
+            lineno = 0
+            for line in f:
+                lineno += 1
+                if line[:6] == ">>>>>>":
+                    # skipped line
+                    all_skipped.append((line[8:], lineno))
         # clean up cover file
-        os.remove(basename+".cover")
+        os.remove(f"{basename}.cover")
         # count executable lines
         visitor = FindExecutableLines()
         visitor.visit(self.tree)
@@ -172,13 +168,13 @@ class ASTTest(unittest.TestCase):
 
     def is_top_level(self, node):
         """Determines if a node is at the top-level of the program."""
-        for elt in self.tree.body:
-            if isinstance(elt, ast.Expr):
-                if elt.value == node:
-                    return True
-            elif elt == node:
-                return True
-        return False
+        return any(
+            isinstance(elt, ast.Expr)
+            and elt.value == node
+            or not isinstance(elt, ast.Expr)
+            and elt == node
+            for elt in self.tree.body
+        )
 
 def get_function_end_lineno(funcdef):
     """Given an ast.FunctionDef node, returns the line number of the last line
